@@ -1,0 +1,39 @@
+2009-03-31 20:50                      README                      Page 1
+
+# Company:  PowerCraft Technology
+# Author:   Copyright Jelle de Jong <jelledejong@powercraft.nl>
+# Note:     Please send me an email if you enhanced this document
+# Version:  0.0.1
+# Date:     2009-03-31
+
+# This document is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This document is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
+------------------------------------------------------------------------
+
+# example of xbindkeys system: layer-scanner-xbindkeysrc.scm
+
+; scannen lineart
+(xbindkey '(Mod4 l) "/usr/bin/x-terminal-emulator -e /usr/bin/pct-scanner-script --lineart")
+
+; scannen grayscale
+(xbindkey '(Mod4 g) "/usr/bin/x-terminal-emulator -e /usr/bin/pct-scanner-script --grayscale")
+
+; scannen color
+(xbindkey '(Mod4 c) "/usr/bin/x-terminal-emulator -e /usr/bin/pct-scanner-script --color")
+
+------------------------------------------------------------------------
+
+

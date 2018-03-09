@@ -1,0 +1,49 @@
+# pct-scanner-script --lineart --config unit0
+# lineart-unit0]
+# DEVICE=net:192.168.24.11:hpaio:/usb/Officejet_J5700_series?serial=CN7BOCF3HP04TC
+# COMMAND="/$HOME/.scripts/scanner/myown-pct-scanner-script-process"
+# SOURCE=Flatbed
+# SOURCE=ADF
+# RESOLUTION=600
+# OUTDIR=${HOME}
+# LOG="$OUTDIR/scanscript/output/status.log"
+# CLEAN=1
+
+# pct-scanner-script --color --config unit0
+# [color-unit0]
+# DEVICE=net:192.168.24.11:hpaio:/usb/Officejet_J5700_series?serial=CN7BOCF3HP04TC
+# SOURCE=ADF
+# RESOLUTION=600
+# OUTDIR=${HOME}
+# OPEN=$(which evince)
+# NODJVU=1
+# NOPDF=1
+# CLEAN=1
+
+# pct-scanner-script --config lineart1
+[lineart1]
+LINEART=1
+DEVICE=net:192.168.24.11:hpaio:/usb/Officejet_J5700_series?serial=CN7BOCF3HP04TC
+SOURCE=Flatbed
+RESOLUTION=600
+OUTDIR=${HOME}
+OPEN=$(which evince)
+
+# pct-scanner-script --config grayscale1
+[grayscale1]
+GRAYSCALE=1
+DEVICE=net:192.168.24.11:hpaio:/usb/Officejet_J5700_series?serial=CN7BOCF3HP04TC
+SOURCE=Flatbed
+RESOLUTION=600
+OUTDIR=${HOME}
+OPEN=$(which evince)
+
+# pct-scanner-script --config color1
+[color1]
+COLOR=1
+DEVICE=net:192.168.24.11:hpaio:/usb/Officejet_J5700_series?serial=CN7BOCF3HP04TC
+SOURCE=Flatbed
+RESOLUTION=600
+OUTDIR=${HOME}
+OPEN=$(which evince)
+

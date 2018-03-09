@@ -1,0 +1,456 @@
+#!/bin/bash
+
+# Company:  PowerCraft Technology
+# Author:   Copyright Jelle de Jong <jelledejong@powercraft.nl>
+# Note:     Please send me an email if you enhanced the script
+# Date:     2009-01-09 / 2009-02-26 / 2009-03-31 / 2009-12-28
+# Date:     2009-12-29 / 2010-09-27 / 2011-07-08 / ...
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
+#~ set -x
+#~ exec 2>$HOME/pct-scanner-script.log
+
+TEXTDOMAINDIR=/usr/share/locale
+TEXTDOMAIN=pct-scanner-script
+
+version="0.0.7"
+author="Jelle de Jong <jelledejong@powercraft.nl>"
+donation="http://www.tuxcrafter.net/pages/contact.html#paypal-donation"
+homepage="https://secure.powercraft.nl/svn/packages/trunk/source/pct-scanner-scripts/"
+licence="http://www.gnu.org/licenses/gpl-3.0.html"
+
+USERCONF="${HOME}"/.pct-scanner-script.conf
+SYSDIR=/etc/pct-scanner-script.conf.d/
+SYSCONF=/etc/pct-scanner-script.conf
+PROCESS=/usr/lib/pct-scanner-scripts/pct-scanner-script-process
+
+unset LINEART
+unset COLOR
+unset GRAYSCALE
+unset SEARCH
+unset RESUME
+unset OUTDIR
+unset DEVICE
+unset SOURCE
+unset RESOLUTION
+unset CONFIG
+unset OPEN
+unset OPTIONS
+
+unset NOPDF
+unset NODJVU
+
+unset CLEAN
+unset VERBOSE
+unset EXEC_VERBOSE
+
+function version()
+{
+    echo $"Usage:     $0 --help"
+    echo $"Version:   $version"
+    echo $"Author:    $author"
+    echo $"Donation:  $donation"
+    echo $"Homepage:  $homepage"
+    echo $"Licence:   $licence"
+}
+
+function usage()
+{
+    echo "easy scan and create merged DjVu and PDF documents for archiving"
+    echo
+    echo "Usage:    $0 [options]"
+    echo
+    echo "Options:"
+    echo "  -h, --help, -?       show this help information"
+    echo "  -l, --lineart        scan in lineart mode [recommended]"
+    echo "  -c, --color          scan in color mode, when supported"
+    echo "  -g, --grayscale      scan in grayscale mode, when supported"
+    echo "  -o, --outdir ...     set the output location [check diskspace]"
+    echo "  -s, --source ...     set the scan source, see --search"
+    echo "  -r, --resolution ... set the scan resolution, see --search"
+    echo "  -d, --device ...     set the device resolution, see --search"
+    echo "  -m, --resume ...     set the resume counter for the page number"
+    echo "  -e, --clean          cleanup all files in outdir/scanscript/"
+    echo "  -p, --nopdf ...      don't create PDF documents [recommend]"
+    echo "  -j, --nodjvu ...     don't create DjVu documents"
+    echo "  -a, --search         search for scan devices and there capabilities"
+    echo "  -n, --config ...     set a configuration to use, when availible"
+    echo "  -v, --version        show the version and author information"
+    echo "  -b, --verbose        make commands verbose, providing more info"
+    echo
+    echo "Examples:"
+    echo "  pct-scanner-script --search"
+    echo "  pct-scanner-script --lineart --outdir $HOME --source ADF --resolution 600 --device net:192.168.1.1:hpaio:/usb/Officejet_J5700_series?serial=CN7BOCF3HP04TC"
+    echo "  pct-scanner-script --resume 11 --lineart --outdir $HOME --source ADF --resolution 600 --device net:192.168.1.1:hpaio:/usb/Officejet_J5700_series?serial=CN7BOCF3HP04TC"
+    echo
+    echo "  pct-scanner-script --lineart"
+    echo "  pct-scanner-script --config config0"
+    echo "  pct-scanner-script --clean --config config0 --nopdf --verbose"
+    echo
+    echo "Configuration:"
+    echo "  $USERCONF"
+    echo "  $SYSDIR"
+    echo "  $SYSCONF"
+    echo
+    echo "  In the configuration files most settings can be set, so not all"
+    echo "  command arguments are needed to start the program. This makes it"
+    echo "  very easy to setup your favorite setups and use it with only the"
+    echo "  --config myconfig0 argument. Please take a look inside the config"
+    echo "  files to get a better idea how to use them. The --config conf0"
+    echo "  argument can be used to select cascading configurations. As an"
+    echo "  example --lineart --config mystyle0 will use the section"
+    echo "  [lineart-mystyle0] in the configuration files. There is also an"
+    echo "  OPEN=COMMAND option in the configuration file to open the combined"
+    echo "  output file with a program of own choice, when the scan is done."
+    echo
+    echo "  The config system uses a priority based cascading system, the"
+    echo "  command arguments options will overwrite the settings found in"
+    echo "  the configuration files, and config files with an higher number"
+    echo "  will overwrite previous found configuration files, but not the"
+    echo "  command line arguments, when they are used."
+    echo
+    echo "Description:"
+    echo "  Easy scan and create merged DjVu and PDF documents for archiving"
+    echo "  This package contains a script and configuration system to easily"
+    echo "  scan documents and create a digital archiving. It can create DjVu"
+    echo "  PDF and JPEG outputs, in merged and individual files. It also has"
+    echo "  a configuration file system where different configurations can be"
+    echo "  defined, making it easy to switch between configurations. The "
+    echo "  script is designed for productivity."
+    echo
+    echo "Features:"
+    echo "  - auto archiving in merged and individual DjVu, PDF, and JPEG files"
+    echo "  - auto and manual resume when scanning somehow fails"
+    echo "  - cascading configuration system, for easy customizing"
+    echo "  - easy command-line-style bash program, with useful options"
+    echo "  - archiving made possible with both adf and flatbed scanners"
+    echo "  - built for productivity and daily use"
+    echo "  - uses bash, scanadf and other mainstream processing tools"
+    echo "  - multilanguage commandline output."
+    echo
+    echo "  This program is a helper script to easy scan and automated digital"
+    echo "  document archiving for normal and adf scanners. You can debug this"
+    echo "  script by running it as bash -x pct-scanner-script [options]. The"
+    echo "  script is just a nice wrapper for the scanadf, DjVu and PDF tools."
+    echo
+    echo "Website:"
+    echo "  https://secure.powercraft.nl/svn/packages/"
+    echo "Mailinglist:"
+    echo "  http://www.powercraft.nl/cgi-bin/mailman/listinfo/packages-commit"
+    echo "  http://www.powercraft.nl/cgi-bin/mailman/listinfo/packages-devel"
+}
+
+while [[ "$1" == -* ]]; do
+    case "$1" in
+        -h|--help|-\?) usage; exit 0;;
+        -l|--lineart) LINEART=1; shift;;
+        -c|--color) COLOR=1; shift;;
+        -g|--grayscale|--gray) GRAYSCALE=1; shift;;
+        -o|--outdir) OUTDIR="$2"; shift; shift;;
+        -s|--source) SOURCE="$2"; shift; shift;;
+        -r|--resolution) RESOLUTION="$2"; shift; shift;;
+        -d|--device) DEVICE="$2"; shift; shift;;
+        -m|--resume) RESUME="$2"; shift; shift;;
+        -e|--clean) CLEAN=1; shift;;
+        -p|--nopdf) NOPDF="$2"; shift; shift;;
+        -j|--nodjvu) NODJVU="$2"; shift; shift;;
+        -a|--search) SEARCH=1; shift;;
+        -n|--config) CONFIG="$2"; shift; shift;;
+        -b|--verbose) VERBOSE="--verbose"; shift;;
+        -v|--version) version; exit 0;;
+        --) shift; break;;
+        -*) echo 1>&2 $"invalid option: $1"; usage; exit 1;;
+    esac
+done
+
+
+function scan_busy_set()
+{
+    if [ -d "$OUTDIR"/scanscript/ ]; then
+        mkdir --parents "$OUTDIR"/scanscript/
+    fi
+    scanbusy="$OUTDIR"/scanscript/.scanbusy.txt
+    touch "$scanbusy"
+    thingstoremove+=("$scanbusy")
+    trap 'rm -f "${thingstoremove[@]}"' 0 1 2 3 15;
+}
+
+function scan_busy_unset()
+{
+    scanbusy="$OUTDIR"/scanscript/.scanbusy.txt
+    rm -f "$scanbusy"
+}
+
+function process_busy_scan()
+{
+    /bin/sleep 5
+    for busyfile in "$OUTDIR"/scanscript/.processbusy-*.txt; do
+        seconds=0
+        while [ -e "$busyfile" ]
+        do
+            /bin/sleep 3
+            seconds=$(($seconds+3))
+        done
+    done
+}
+
+function scan_configuration()
+{
+    file="$1"
+    unset options
+    [ ! -z "$RESUME" ] && options+=("RESUME")
+    [ ! -z "$OUTDIR" ] && options+=("OUTDIR")
+    [ ! -z "$DEVICE" ] && options+=("DEVICE")
+    [ ! -z "$SOURCE" ] && options+=("SOURCE")
+    [ ! -z "$RESOLUTION" ] && options+=("RESOLUTION")
+    [ ! -z "$NOPDF" ] && options+=("NOPDF")
+    [ ! -z "$NODJVU" ] && options+=("NODJVU")
+    for value in "${options[@]}"
+    do
+        sed -n -i -e "/$value/!p" "$file"
+    done
+}
+
+function get_configuration()
+{
+    section="$1"
+    if [ ! -z "$section" ] && [ ! -z "$CONFIG" ]; then
+        section+="-$CONFIG"
+    elif [ -z "$section" ] && [ ! -z "$CONFIG" ]; then
+        section="$CONFIG"
+    fi
+    [ ! -d "$SYSDIR" ] && mkdir --parents $VERBOSE "$SYSDIR"
+    tempfile=$(mktemp -p "/tmp/" tempfile.XXXXXXXXXX)
+    thingstoremove+=("$tempfile")
+    trap 'rm -f "${thingstoremove[@]}"' 0 1 2 3 15;
+    [ -z "$tempfile" ] && exit 1
+    [ -r "$USERCONF" ] && files+="$USERCONF"
+    files+=$'\n'
+    files+=$(run-parts --list --reverse "$SYSDIR" )
+    [ -r "$SYSCONF" ] && files+=$'\n'"$SYSCONF"
+    if [ -n "$files" ]; then
+        while read file; do
+            set +e
+            [ ! -r "$file" ] && continue
+            sed -n '/^\['"$section"'\]$/,/^\[.*\]$/{//!p}' "$file" > "$tempfile"
+            scan_configuration "$tempfile"
+            . "$tempfile"
+            set -e
+        done < <(echo "$files")
+    fi
+}
+
+function check_dependencies()
+{
+    if [ -z $(which scanadf) ]
+    then
+        echo 1>&2 $"dependencies not fulfilled, please install all necessary application"
+        echo 1>&2 $"hint: you may try to install the sane package that contains the scanadf program"
+        echo 1>&2 $"hint: on debian based system the sane package can be isntalled with sudo apt-get install sane"
+        exit 1
+    fi
+}
+
+function setup_environment()
+{
+    if [ -z "$OUTDIR" ]; then
+        echo 1>&2 $"outdir not set, try adding --outdir $HOME, closing now"
+        exit 1
+    elif [ -z "$DEVICE" ]; then
+        echo 1>&2 $"device not set, try adding --device net:192.168.1.1:hpaio:/usb/Officejet_J5700_series?serial=CN7BOCF3HP04TC, closing now"
+        exit 1
+    elif [ -z "$SOURCE" ]; then
+        echo 1>&2 $"source not set, try adding --source adf, closing now"
+        exit 1
+    elif [ -z "$RESOLUTION" ]; then
+        echo 1>&2 $"resolution not set, try adding --resolution 600, closing now"
+        exit 1
+    fi
+
+    [ ! -d $OUTDIR/scanscript/input/ ] && mkdir $VERBOSE --parents $OUTDIR/scanscript/input/
+    [ ! -d $OUTDIR/scanscript/output/ ] && mkdir $VERBOSE --parents $OUTDIR/scanscript/output/
+    [ ! -d $OUTDIR/scanscript/processing/ ] && mkdir $VERBOSE --parents $OUTDIR/scanscript/processing/
+
+    [ -z "$LOG" ] && LOG="$OUTDIR/scanscript/output/status.log"
+    [ -z "$COMMAND" ] && COMMAND="$PROCESS"
+
+    export OUTDIR="$OUTDIR"
+    export LOG="$LOG"
+
+    [ ! -z "$OPEN" ] && export OPEN="$OPEN"
+    [ ! -z "$RMINPUT" ] && export RMINPUT="$RMINPUT"
+    [ ! -z "$VERBOSE" ] && export VERBOSE="$VERBOSE"
+    [ ! -z "$EXEC_VERBOSE" ] && export EXEC_VERBOSE="$EXEC_VERBOSE"
+
+    [ ! -z "$COLOR" ] && export COLOR="$COLOR"
+    [ ! -z "$GRAYSCALE" ] && export GRAYSCALE="$GRAYSCALE"
+    [ ! -z "$LINEART" ] && export LINEART="$LINEART"
+
+    NOPDF="$(echo $NOPDF | tr [:upper:] [:lower:])"
+    if [ "$NOPDF" = "1" ] || [ "$NOPDF" == "yes" ] || [ "$NOPDF" == "true" ]; then
+        NOPDF=1
+    else
+        NOPDF=0
+    fi
+
+    NODJVU="$(echo $NODJVU | tr [:upper:] [:lower:])"
+    if [ "$NODJVU" = "1" ] || [ "$NODJVU" == "yes" ] || [ "$NODJVU" == "true" ]; then
+        NODJVU=1
+    else
+        NODJVU=0
+    fi
+
+    export NOPDF="$NOPDF"
+    export NODJVU="$NODJVU"
+
+    [ ! -d $OUTDIR/scanscript/processing/pdf/ ] && [ $NOPDF = 0 ] && mkdir $VERBOSE --parents $OUTDIR/scanscript/processing/pdf/
+
+    return 0
+}
+
+function directory_clean()
+{
+    if [ ! -z $CLEAN ]; then
+        if [ -z "$OUTDIR" ]; then
+            echo 1>&2 $"outdir not set, try adding --outdir $HOME, closing now"
+            exit 1
+        elif [ -e "$OUTDIR"/scanscript/ ]; then
+            find $OUTDIR/scanscript/ -mindepth 1 -type f -exec rm $VERBOSE '{}' \;
+        fi
+    fi
+}
+
+function check_startcount()
+{
+    if [ ! -z "$RESUME" ]; then
+        startcount=${RESUME}
+        echo "counter: $startcount" > "$LOG"
+    elif [ -e "$LOG" ]; then
+        input=$(head -n 1 "$LOG")
+        input=${input##*: }
+        startcount=${input}
+        [ -z "$startcount" ] && startcount=1 && echo "counter: $startcount" > "$LOG"
+    else
+        startcount=1
+        echo "counter: $startcount" > "$LOG"
+    fi
+
+    if [ -n "$startcount" ]; then
+        echo $"startcount: $startcount"
+    else
+        echo 1>&2 $"startcount is not detected, closing now"
+        exit 1
+    fi
+
+    if [ "$(echo $SOURCE | tr [:upper:] [:lower:])" == "flatbed" ]; then
+        EXTRA="-e $startcount"
+    fi
+
+    if [ -z $VERBOSE ]; then
+        EXEC_VERBOSE="2>/dev/null"
+    else
+        unset EXEC_VERBOSE
+    fi
+}
+
+function scanner_search()
+{
+    echo $"searching for scanadf scanners and there options, please standby ..."
+    scanadf --verbose --help
+}
+
+function scanner_lineart()
+{
+    get_configuration lineart
+    directory_clean
+    setup_environment
+    check_startcount
+    echo $"lineart: yes"
+    echo $"device: $DEVICE"
+    echo $"outdir: $OUTDIR/scanscript/"
+    echo $"log: $LOG"
+    echo $"source: $SOURCE"
+    echo $"resolution: $RESOLUTION"
+    echo $"scanning of document has started, please standby ..."
+    scan_busy_set
+    scanadf $VERBOSE --device-name "$DEVICE" --scan-script "$COMMAND" --output-file "$OUTDIR"/scanscript/input/image-%04d.pbm --source "$SOURCE" --resolution $RESOLUTION --mode Lineart $OPTIONS --start-count "$startcount" "$EXTRA" $EXEC_VERBOSE
+    scan_busy_unset
+}
+
+function scanner_color()
+{
+    get_configuration color
+    directory_clean
+    setup_environment
+    check_startcount
+    echo $"color: yes"
+    echo $"device: $DEVICE"
+    echo $"outdir: $OUTDIR/scanscript/"
+    echo $"log: $LOG"
+    echo $"source: $SOURCE"
+    echo $"resolution: $RESOLUTION"
+    echo $"scanning of document has started, please standby ..."
+    scan_busy_set
+    scanadf $VERBOSE --device-name "$DEVICE" --scan-script "$COMMAND" --output-file "$OUTDIR"/scanscript/input/image-%04d.pbm --source "$SOURCE" --resolution $RESOLUTION --mode Color $OPTIONS --start-count "$startcount" "$EXTRA" $EXEC_VERBOSE
+    scan_busy_unset
+}
+
+function scanner_grayscale()
+{
+    get_configuration grayscale
+    directory_clean
+    setup_environment
+    check_startcount
+    echo $"grayscale: yes"
+    echo $"device: $DEVICE"
+    echo $"outdir: $OUTDIR/scanscript/"
+    echo $"log: $LOG"
+    echo $"source: $SOURCE"
+    echo $"resolution: $RESOLUTION"
+    echo $"scanning of document has started, please standby ..."
+    scan_busy_set
+    scanadf $VERBOSE --device-name "$DEVICE" --scan-script "$COMMAND" --output-file "$OUTDIR"/scanscript/input/image-%04d.pbm --source "$SOURCE" --resolution $RESOLUTION --mode Gray $OPTIONS --start-count "$startcount" "$EXTRA" $EXEC_VERBOSE
+    scan_busy_unset
+}
+
+check_dependencies
+
+if [ ! -z $CONFIG ]; then
+    get_configuration;
+fi
+
+if [ ! -z $LINEART ]; then
+    scanner_lineart;
+elif [ ! -z $COLOR ]; then
+    scanner_color;
+elif [ ! -z $GRAYSCALE ]; then
+    scanner_grayscale;
+elif [ ! -z $CLEAN ]; then
+    directory_clean;
+elif [ ! -z $SEARCH ]; then
+    scanner_search;
+elif [ -z $CLEAN ]; then
+    echo 1>&2 $"pct-scanner-script: configuration variables not found, exiting now"
+    exit 1
+fi
+
+process_busy_scan;
+
+echo $"processing: completed, closing now"
+
+exit
+

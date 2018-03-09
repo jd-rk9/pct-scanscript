@@ -1,0 +1,318 @@
+#!/bin/bash
+
+# Company:  PowerCraft Technology
+# Author:   Copyright Jelle de Jong <jelledejong@powercraft.nl>
+# Note:     Please send me an email if you enhanced the script
+# Date:     2009-01-09 / 2009-02-24 / 2009-03-31 / 2009-12-28 /
+# Date:     2009-12-29 / ...
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+# MA 02110-1301, USA.
+
+# set -x
+# exec 2>$HOME/pct-scanner-script-process.log
+# STRACE=$(which strace)
+
+TEXTDOMAINDIR=/usr/share/locale
+TEXTDOMAIN=pct-scanner-script-process
+
+file="$1"
+version="0.0.5"
+
+function process_busy_set()
+{
+    sourcefile="$1"
+    filename=${sourcefile##*/}; filename=${filename%.*}; filename=${filename##*-}
+    number=$(echo "$filename - 0" | bc)
+    if [ -d "$OUTDIR"/scanscript/ ]; then
+        mkdir --parents "$OUTDIR"/scanscript/
+    fi
+    processbusy="$OUTDIR"/scanscript/.processbusy-$number.txt
+    touch "$processbusy"
+    thingstoremove+=("$processbusy")
+    trap 'rm -f "${thingstoremove[@]}"' 0 1 2 3 15;
+}
+
+function pre_process_busy_scan()
+{
+    sourcefile="$1"
+    filename=${sourcefile##*/}; filename=${filename%.*}; filename=${filename##*-}
+    number=$(echo "$filename - 1" | bc)
+    preprocess="$OUTDIR"/scanscript/.processbusy-$number.txt
+    while [ -e "$preprocess" ]
+    do
+        /bin/sleep 1
+    done
+}
+
+function post_process_busy_scan()
+{
+    sourcefile="$1"
+    filename=${sourcefile##*/}; filename=${filename%.*}; filename=${filename##*-}
+    number=$(echo "$filename + 1" | bc)
+    postprocess="$OUTDIR"/scanscript/.processbusy-$number.txt
+    scanbusy="$OUTDIR"/scanscript/.scanbusy.txt
+    if [ -e "$postprocess" ] || [ -e "$scanbusy" ]; then
+        echo "wait"
+    fi
+}
+
+function process_counter()
+{
+    logfile="$1"
+    input=$(head -n 1 "$logfile")
+    input=${input##*: }
+    if [ -n "$input" ]
+    then
+        echo $"processing: page: $input"
+        count=${input}
+        let count+=1
+        find='counter:.*'
+        replace="counter: $count"
+        sed -i -e "s,$find,$replace,g" "$logfile"
+        echo $"processing: next page: $count"
+    fi
+}
+
+function process_grayscale()
+{
+    sourcefile="$1"
+    logfile="$LOG"
+    date=$(date)
+
+    dirname=${sourcefile%/*}
+    filename=${sourcefile##*/}; filename=${filename%.*}
+    extension=${sourcefile##*.}
+
+    if [ ! -z "$SCAN_RES" ] && [ ! -z "$SCAN_WIDTH" ] && [ ! -z "$SCAN_HEIGHT" ] && [ ! -z "$SCAN_DEPTH" ] && [ ! -z "$SCAN_FORMAT" ]&& [ ! -z "$SCAN_FORMAT_ID" ]; then
+        echo $"processing: all needed variables are found, continuing now"
+    else
+        echo 1>&2 $"processing: system variables not found, exiting now"
+        exit 1
+    fi
+
+    echo "-- -- -- -- -- -- -- --" >> "$logfile"
+    echo "date: $date" >> "$logfile"
+    echo "scanadf: res:$SCAN_RES width:$SCAN_WIDTH height:$SCAN_HEIGHT depth:$SCAN_DEPTH format:$SCAN_FORMAT id:$SCAN_FORMAT_ID" >> "$logfile"
+
+    if [ "$NOPDF" = 0 ]; then
+        echo "processing: convert $sourcefile -depth 8 -compress JPEG -quality 40 $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf" >> "$logfile"
+        $STRACE convert "$sourcefile" -depth 8 -compress JPEG -quality 40 $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf
+
+        if [ -e $OUTDIR/scanscript/output/document-multi-page-grayscale.pdf ] && [ -e $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf ]
+        then
+            mv $OUTDIR/scanscript/output/document-multi-page-grayscale.pdf $OUTDIR/scanscript/output/document-multi-page-old.pdf
+            pdftk $OUTDIR/scanscript/output/document-multi-page-old.pdf $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf cat output $OUTDIR/scanscript/output/document-multi-page-grayscale.pdf
+            rm $OUTDIR/scanscript/output/document-multi-page-old.pdf
+        elif [ -e $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf ]; then
+            pdftk $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf cat output $OUTDIR/scanscript/output/document-multi-page-grayscale.pdf
+        fi
+    fi
+
+    if [ "$NODJVU" = 0 ]; then
+        echo "processing: c44 -crcbnone -dpi $SCAN_RES $sourcefile $OUTDIR/scanscript/processing/document-single-page-$filename.djvu" >> "$logfile"
+        echo $"processing: executing c44 compression command, please standby ..."
+        c44 -crcbnone -dpi $SCAN_RES "$sourcefile" $OUTDIR/scanscript/processing/document-single-page-$filename.djvu $EXEC_VERBOSE
+
+        # cpaldjvu -verbose -bgwhite -colors 8 -dpi 600 image-0007.pgm $OUTDIR/scanscript/processing/document-single-page-image-0007.djvu
+        # c44 -crcbnone -dpi 600 image-0008.pgm $OUTDIR/scanscript/processing/document-single-page-image-0008.djvu
+
+        if [ -e $OUTDIR/scanscript/output/document-multi-page-grayscale.djvu ] && [ -e $OUTDIR/scanscript/processing/document-single-page-$filename.djvu ]
+        then
+            djvm -insert $OUTDIR/scanscript/output/document-multi-page-grayscale.djvu $OUTDIR/scanscript/processing/document-single-page-$filename.djvu
+        else
+            djvm -create $OUTDIR/scanscript/output/document-multi-page-grayscale.djvu $OUTDIR/scanscript/processing/document-single-page-$filename.djvu
+        fi
+    fi
+
+    if [ ! -z "$RMINPUT" ]; then
+        echo "processing: removing input file: $sourcefile" >> "$logfile"
+        rm $VERBOSE "$sourcefile"
+    fi
+
+    echo "-- -- -- -- -- -- -- --" >> "$logfile"
+
+    process_counter "$logfile"
+
+    if [ ! "$(post_process_busy_scan $sourcefile)" == "wait" ] && [ ! -z "$OPEN" ]; then
+        if [ "$NODJVU" = 0 ]; then
+            nohup "$OPEN" "$OUTDIR"/scanscript/output/document-multi-page-grayscale.djvu > "$OUTDIR"/scanscript/.open.log 2>/dev/null &
+        elif [ "$NOPDF" = 0 ]; then
+            nohup "$OPEN" "$OUTDIR"/scanscript/output/document-multi-page-grayscale.pdf > "$OUTDIR"/scanscript/.open.log 2>/dev/null &
+        fi
+    fi
+
+    return
+}
+
+function process_color()
+{
+    sourcefile="$1"
+    logfile="$LOG"
+    date=$(date)
+
+    dirname=${sourcefile%/*}
+    filename=${sourcefile##*/}; filename=${filename%.*}
+    extension=${sourcefile##*.}
+
+    if [ ! -z "$SCAN_RES" ] && [ ! -z "$SCAN_WIDTH" ] && [ ! -z "$SCAN_HEIGHT" ] && [ ! -z "$SCAN_DEPTH" ] && [ ! -z "$SCAN_FORMAT" ]&& [ ! -z "$SCAN_FORMAT_ID" ]; then
+        echo $"processing: all needed variables are found, continuing now"
+    else
+        echo 1>&2 $"processing: system variables not found, exiting now"
+        exit 1
+    fi
+
+    echo "-- -- -- -- -- -- -- --" >> "$logfile"
+    echo "date: $date" >> "$logfile"
+    echo "scanadf: res:$SCAN_RES width:$SCAN_WIDTH height:$SCAN_HEIGHT depth:$SCAN_DEPTH format:$SCAN_FORMAT id:$SCAN_FORMAT_ID" >> "$logfile"
+
+    if [ "$NOPDF" = 0 ]; then
+        echo "processing: convert $sourcefile -compress JPEG -quality 40 $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf" >> "$logfile"
+        $STRACE convert "$sourcefile" -compress JPEG -quality 40 $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf
+
+        if [ -e $OUTDIR/scanscript/output/document-multi-page-color.pdf ] && [ -e $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf ]
+        then
+            mv $OUTDIR/scanscript/output/document-multi-page-color.pdf $OUTDIR/scanscript/output/document-multi-page-old.pdf
+            pdftk $OUTDIR/scanscript/output/document-multi-page-old.pdf $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf cat output $OUTDIR/scanscript/output/document-multi-page-color.pdf
+            rm $OUTDIR/scanscript/output/document-multi-page-old.pdf
+        else
+            pdftk $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf cat output $OUTDIR/scanscript/output/document-multi-page-color.pdf
+        fi
+    fi
+
+    if [ "$NODJVU" = 0 ]; then
+        echo "processing: c44 -dpi $SCAN_RES $sourcefile $OUTDIR/scanscript/processing/document-single-page-$filename.djvu" >> "$logfile"
+        echo $"processing: executing c44 compression command, please standby ..."
+        c44 -dpi $SCAN_RES "$sourcefile" $OUTDIR/scanscript/processing/document-single-page-$filename.djvu $EXEC_VERBOSE
+
+        # cpaldjvu -verbose -bgwhite -colors 8 -dpi 600 image-0007.pgm $OUTDIR/scanscript/processing/document-single-page-image-0007.djvu
+        # c44 -crcbnone -dpi 600 image-0008.pgm $OUTDIR/scanscript/processing/document-single-page-image-0008.djvu
+        # cpaldjvu -verbose -dpi $SCAN_RES -bgwhite "$sourcefile" ~/scanjet/processing/document-single-page-$filename.djvu
+        # c44 -dpi 600 /home/jelle/scanjet/input/image-0001.ppm /home/jelle/scanjet/processing/document-single-page-image-0001.djvu
+
+        if [ -e $OUTDIR/scanscript/output/document-multi-page-color.djvu ] && [ -e $OUTDIR/scanscript/processing/document-single-page-$filename.djvu ]
+        then
+            djvm -insert $OUTDIR/scanscript/output/document-multi-page-color.djvu $OUTDIR/scanscript/processing/document-single-page-$filename.djvu
+        else
+            djvm -create $OUTDIR/scanscript/output/document-multi-page-color.djvu $OUTDIR/scanscript/processing/document-single-page-$filename.djvu
+        fi
+    fi
+
+    if [ ! -z "$RMINPUT" ]; then
+        echo "processing: removing input file: $sourcefile" >> "$logfile"
+        rm $VERBOSE "$sourcefile"
+    fi
+
+    echo "-- -- -- -- -- -- -- --" >> "$logfile"
+
+    process_counter "$logfile"
+
+    if [ ! "$(post_process_busy_scan $sourcefile)" == "wait" ] && [ ! -z "$OPEN" ]; then
+        if [ "$NODJVU" = 0 ]; then
+            nohup "$OPEN" $OUTDIR/scanscript/output/document-multi-page-color.djvu > "$OUTDIR"/scanscript/.open.log 2>/dev/null &
+        elif [ "$NOPDF" = 0 ]; then
+            nohup "$OPEN" $OUTDIR/scanscript/output/document-multi-page-color.pdf > "$OUTDIR"/scanscript/.open.log 2>/dev/null &
+        fi
+    fi
+
+    return
+}
+
+function process_lineart()
+{
+    sourcefile="$1"
+    logfile="$LOG"
+    date=$(date)
+
+    dirname=${sourcefile%/*}
+    filename=${sourcefile##*/}; filename=${filename%.*}
+    extension=${sourcefile##*.}
+
+    if [ ! -z "$SCAN_RES" ] && [ ! -z "$SCAN_WIDTH" ] && [ ! -z "$SCAN_HEIGHT" ] && [ ! -z "$SCAN_DEPTH" ] && [ ! -z "$SCAN_FORMAT" ]&& [ ! -z "$SCAN_FORMAT_ID" ]; then
+        echo $"processing: all needed variables are found, continuing now"
+    else
+        echo 1>&2 $"processing: system variables not found, exiting now"
+        exit 1
+    fi
+
+    echo "-- -- -- -- -- -- -- --" >> "$logfile"
+    echo "date: $date" >> "$logfile"
+    echo "scanadf: res:$SCAN_RES width:$SCAN_WIDTH height:$SCAN_HEIGHT depth:$SCAN_DEPTH format:$SCAN_FORMAT id:$SCAN_FORMAT_ID" >> "$logfile"
+
+    if [ "$NOPDF" = 0 ]; then
+
+        echo "processing: convert $sourcefile -depth 8 -compress Group4 $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf" >> "$logfile"
+        $STRACE convert "$sourcefile" -depth 8 -compress Group4 $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf
+
+        if [ -e $OUTDIR/scanscript/output/document-multi-page-lineart.pdf ] && [ -e $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf ]; then
+            mv $OUTDIR/scanscript/output/document-multi-page-lineart.pdf $OUTDIR/scanscript/output/document-multi-page-old.pdf
+            pdftk $OUTDIR/scanscript/output/document-multi-page-old.pdf $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf cat output $OUTDIR/scanscript/output/document-multi-page-lineart.pdf
+            rm $OUTDIR/scanscript/output/document-multi-page-old.pdf
+        elif [ -e $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf ]; then
+            pdftk $OUTDIR/scanscript/processing/pdf/document-single-page-$filename.pdf cat output $OUTDIR/scanscript/output/document-multi-page-lineart.pdf
+        fi
+    fi
+
+    if [ "$NODJVU" = 0 ]; then
+        echo "processing: cjb2 -verbose -clean -dpi $SCAN_RES $sourcefile $OUTDIR/scanscript/processing/document-single-page-$filename.djvu" >> "$logfile"
+        cjb2 -verbose -clean -dpi $SCAN_RES "$sourcefile" $OUTDIR/scanscript/processing/document-single-page-$filename.djvu $EXEC_VERBOSE
+
+        if [ -e $OUTDIR/scanscript/output/document-multi-page-lineart.djvu ] && [ -e $OUTDIR/scanscript/processing/document-single-page-$filename.djvu ]
+        then
+            djvm -insert $OUTDIR/scanscript/output/document-multi-page-lineart.djvu $OUTDIR/scanscript/processing/document-single-page-$filename.djvu
+        else
+            djvm -create $OUTDIR/scanscript/output/document-multi-page-lineart.djvu $OUTDIR/scanscript/processing/document-single-page-$filename.djvu
+        fi
+
+       #  ocrodjvu $OUTDIR/scanscript/processing/document-single-page-$filename.djvu --language=nld -i $OUTDIR/scanscript/output/document-multi-page-lineart-ocr.djvu
+    fi
+
+    if [ ! -z "$RMINPUT" ]; then
+        echo "processing: removing input file: $sourcefile" >> "$logfile"
+        rm $VERBOSE "$sourcefile"
+    fi
+
+    echo "-- -- -- -- -- -- -- --" >> "$logfile"
+
+    process_counter "$logfile"
+
+    if [ ! "$(post_process_busy_scan $sourcefile)" == "wait" ] && [ ! -z "$OPEN" ]; then
+        if [ "$NODJVU" = 0 ]; then
+            nohup "$OPEN" $OUTDIR/scanscript/output/document-multi-page-lineart.djvu > "$OUTDIR"/scanscript/.open.log 2>/dev/null &
+        elif [ "$NOPDF" = 0 ]; then
+            nohup "$OPEN" $OUTDIR/scanscript/output/document-multi-page-lineart.pdf > "$OUTDIR"/scanscript/.open.log 2>/dev/null &
+        fi
+    fi
+
+    return
+}
+
+if [ ! -z "$LOG" ] && [ ! -z "$OUTDIR" ]; then
+    process_busy_set "$file";
+    pre_process_busy_scan "$file";
+    if [ ! -z $LINEART ]; then
+        process_lineart "$file";
+    elif [ ! -z $COLOR ]; then
+        process_color "$file";
+    elif [ ! -z $GRAYSCALE ]; then
+        process_grayscale "$file";
+    fi
+else
+    echo 1>&2 $"processing: system variables not found, exiting now"
+    exit 1
+fi
+
+exit
+
